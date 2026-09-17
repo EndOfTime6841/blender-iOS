@@ -1,0 +1,58 @@
+name: Build Unsigned iOS IPA
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch: # Allows manual trigger from the GitHub UI
+
+jobs:
+  build-unsigned:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Select latest Xcode version
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      # OPTIONAL: Uncomment and add commands if you use a package manager
+      # - name: Install Dependencies
+      #   run: |
+      #     pod install # for CocoaPods
+      #     # flutter pub get # for Flutter
+      #     # npm install # for React Native
+
+       Hades-Build-Archive:
+      - name: Build Unsigned Archive
+        run: |
+          xcodebuild archive \
+            -workspace YourProject.xcworkspace \
+            -scheme YourScheme \
+            -archivePath $RUNNER_TEMP/YourApp.xcarchive \
+            -sdk iphoneos \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            PROVISIONING_PROFILE_SPECIFIER=""
+
+      - name: Package App into Unsigned IPA
+        run: |
+          # Create the mandatory "Payload" directory structure for an IPA file
+          mkdir -p $RUNNER_TEMP/Payload
+          
+          # Copy the compiled .app bundle from the archive into the Payload folder
+          cp -R $RUNNER_TEMP/YourApp.xcarchive/Products/Applications/*.app $RUNNER_TEMP/Payload/
+          
+          # Zip the Payload directory into a .ipa file
+          cd $RUNNER_TEMP
+          zip -r blend-test.ipa Payload
+
+      - name: Upload Unsigned IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: test
+          path: ${{ runner.temp }}/blend-test.ipa
+         
