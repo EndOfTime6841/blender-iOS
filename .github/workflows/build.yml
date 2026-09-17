@@ -1,37 +1,45 @@
-name: Build Unsigned iOS IPA
+name: Build Unsigned Blender iOS IPA (Manual)
 
+# This configures the workflow to ONLY trigger manually
 on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
-  workflow_dispatch: # Allows manual trigger from the GitHub UI
+  workflow_dispatch:
 
 jobs:
-  build-unsigned:
+  build-blender-ios:
     runs-on: macos-latest
+    timeout-minutes: 90 # Blender is massive and can take a long time to build
 
-  steps:
+    steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
-      - name: Select latest Xcode version
+      - name: Setup Homebrew and Dependencies
+        run: |
+          brew install cmake git-lfs
+
+      - name: Select Xcode Version
         run: sudo xcode-select -s /Applications/Xcode.app
 
-      # OPTIONAL: Uncomment and add commands if you use a package manager
-      # - name: Install Dependencies
-      #   run: |
-      #     pod install # for CocoaPods
-      #     # flutter pub get # for Flutter
-      #     # npm install # for React Native
-
-       Hades-Build-Archive:
-      - name: Build Unsigned Archive
+      - name: Download Pre-compiled iOS Libraries
         run: |
+          ./build_files/utils/make_update.py --use-ios-libraries
+
+      - name: Generate Xcode Project via CMake
+        run: |
+          mkdir build_ios
+          cmake -G Xcode -S . -B build_ios \
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_SYSROOT=iphoneos
+
+      - name: Build Unsigned Archive via xcodebuild
+        run: |
+          cd build_ios
           xcodebuild archive \
-            -workspace YourProject.xcworkspace \
-            -scheme YourScheme \
-            -archivePath $RUNNER_TEMP/YourApp.xcarchive \
+            -project Blender.xcodeproj \
+            -scheme install \
+            -archivePath $RUNNER_TEMP/Blender.xcarchive \
             -sdk iphoneos \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
@@ -40,19 +48,14 @@ jobs:
 
       - name: Package App into Unsigned IPA
         run: |
-          # Create the mandatory "Payload" directory structure for an IPA file
           mkdir -p $RUNNER_TEMP/Payload
-          
-          # Copy the compiled .app bundle from the archive into the Payload folder
-          cp -R $RUNNER_TEMP/YourApp.xcarchive/Products/Applications/*.app $RUNNER_TEMP/Payload/
-          
-          # Zip the Payload directory into a .ipa file
+          cp -R $RUNNER_TEMP/Blender.xcarchive/Products/Applications/Blender.app $RUNNER_TEMP/Payload/
           cd $RUNNER_TEMP
-          zip -r blend-test.ipa Payload
+          zip -r Blender-iOS-Unsigned.ipa Payload
 
       - name: Upload Unsigned IPA Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: test
-          path: ${{ runner.temp }}/blend-test.ipa
-         
+          name: Blender-iPadOS-Unsigned
+          path: ${{ runner.temp }}/Blender-iOS-Unsigned.ipa
+          retention-days: 14
